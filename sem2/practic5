@@ -1,0 +1,219 @@
+public class Calculator {
+    // ИСпользуем массив для хранения истории
+    private static String[] history = new String[100];
+    private static int historyCount = 0;
+    
+    public static void main(String[] args) {
+
+        char[] inputBuffer = new char[100];
+        int inputLength = 0;
+        
+        System.out.println("Калькулятор. Введите выражение или команду (history, exit)");
+        
+        while (true) {
+            System.out.print("> ");
+            
+            inputLength = 0;
+            while (true) {
+                char c = readChar();
+                if (c == '\n') break;
+                inputBuffer[inputLength++] = c;
+            }
+            
+            String input = new String(inputBuffer, 0, inputLength).trim();
+            
+            if (input.isEmpty()) {
+                continue;
+            }
+            
+            if (input.equalsIgnoreCase("exit")) {
+                break;
+            }
+            
+            if (input.equalsIgnoreCase("history")) {
+                showHistory();
+                continue;
+            }
+            
+            try {
+                double result = evaluateExpression(input);
+                System.out.println("Результат: " + result);
+                addToHistory(input, result);
+            } catch (Exception e) {
+                System.out.println("Ошибка: " + e.getMessage());
+            }
+        }
+    }
+    
+    private static char readChar() {
+        try {
+            return (char)System.in.read();
+        } catch (Exception e) {
+            return '\0';
+        }
+    }
+    
+    private static void addToHistory(String expression, double result) {
+        if (historyCount < history.length) {
+            history[historyCount++] = expression + " = " + result;
+        }
+    }
+    
+    private static void showHistory() {
+        System.out.println("\nИстория вычислений:");
+        if (historyCount == 0) {
+            System.out.println("История пуста");
+            return;
+        }
+        
+        for (int i = 0; i < historyCount; i++) {
+            System.out.println((i + 1) + ". " + history[i]);
+        }
+    }
+    
+    private static double evaluateExpression(String expr) {
+        // Обработка модуля |x|
+        expr = processAbs(expr);
+        
+        expr = processParentheses(expr);
+        
+        // Вычисление выражения без скобок и модулей
+        return evaluateSimpleExpression(expr);
+    }
+    
+    private static String processAbs(String expr) {
+        int start = expr.indexOf('|');
+        while (start != -1) {
+            int end = expr.indexOf('|', start + 1);
+            if (end == -1) {
+                throw new IllegalArgumentException("Непарные знаки модуля");
+            }
+            
+            String inside = expr.substring(start + 1, end);
+            double value = evaluateExpression(inside);
+            value = value < 0 ? -value : value;
+            
+            expr = expr.substring(0, start) + value + expr.substring(end + 1);
+            start = expr.indexOf('|');
+        }
+        return expr;
+    }
+    
+    private static String processParentheses(String expr) {
+        int start = expr.lastIndexOf('(');
+        while (start != -1) {
+            int end = expr.indexOf(')', start);
+            if (end == -1) {
+                throw new IllegalArgumentException("Непарные скобки");
+            }
+            
+            String inside = expr.substring(start + 1, end);
+            double value = evaluateExpression(inside);
+            
+            expr = expr.substring(0, start) + value + expr.substring(end + 1);
+            start = expr.lastIndexOf('(');
+        }
+        return expr;
+    }
+    
+    private static double evaluateSimpleExpression(String expr) {
+        // Обработка возведения в степень (справа налево)
+        int powIndex = expr.lastIndexOf('^');
+        if (powIndex != -1) {
+            double left = evaluateSimpleExpression(expr.substring(0, powIndex));
+            double right = evaluateSimpleExpression(expr.substring(powIndex + 1));
+            return power(left, right);
+        }
+        
+        // Обработка умножения, деления, остатка
+        for (int i = 0; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+            if (c == '*' || c == '/' || c == '%') {
+                double left = evaluateSimpleExpression(expr.substring(0, i));
+                double right = evaluateSimpleExpression(expr.substring(i + 1));
+                
+                switch (c) {
+                    case '*': return left * right;
+                    case '/': 
+                        if (right == 0) throw new ArithmeticException("Деление на ноль");
+                        return left / right;
+                    case '%': return left % right;
+                }
+            }
+        }
+        
+        // Обработка сложения и вычитания
+        for (int i = 0; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+            if (c == '+' || c == '-') {
+
+                if (i == 0 || isOperator(expr.charAt(i - 1))) {
+                    continue;
+                }
+                
+                double left = evaluateSimpleExpression(expr.substring(0, i));
+                double right = evaluateSimpleExpression(expr.substring(i + 1));
+                
+                switch (c) {
+                    case '+': return left + right;
+                    case '-': return left - right;
+                }
+            }
+        }
+        
+        return parseDouble(expr);
+    }
+    
+    private static boolean isOperator(char c) {
+        return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '^';
+    }
+    
+    // Реализация возведения в степень
+    private static double power(double base, double exponent) {
+        if (exponent == 0) return 1;
+        if (exponent < 0) return 1 / power(base, -exponent);
+        
+        double result = 1;
+        for (int i = 0; i < exponent; i++) {
+            result *= base;
+        }
+        return result;
+    }
+    
+    private static double parseDouble(String s) {
+        double result = 0;
+        double fraction = 0;
+        boolean negative = false;
+        boolean hasFraction = false;
+        int fractionDigits = 1;
+        
+        int i = 0;
+        if (s.charAt(0) == '-') {
+            negative = true;
+            i++;
+        }
+        
+        for (; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '.') {
+                hasFraction = true;
+                continue;
+            }
+            
+            if (c < '0' || c > '9') {
+                throw new IllegalArgumentException("Некорректное число: " + s);
+            }
+            
+            int digit = c - '0';
+            if (!hasFraction) {
+                result = result * 10 + digit;
+            } else {
+                fraction = fraction * 10 + digit;
+                fractionDigits *= 10;
+            }
+        }
+        
+        result += fraction / fractionDigits;
+        return negative ? -result : result;
+    }
+}
